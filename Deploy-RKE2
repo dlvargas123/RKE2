@@ -1,0 +1,83 @@
+#!/bin/bash
+
+# Lista de nodos
+nodos=("nodo-11" "nodo-12" "nodo-13")
+
+# Función para verificar la conexión SSH a un nodo
+function verificar_ssh {
+  nodo="$1"
+
+  # Intento de conexión SSH
+  ssh -o "StrictHostKeyChecking=no" $nodo exit 2>/dev/null
+
+  # Verificar el código de salida
+  if [ $? -eq 0 ]; then
+    echo "Conexión SSH a $nodo: OK"
+  else
+    echo "Falló la conexión SSH a $nodo"
+  fi
+}
+
+# Recorrer la lista de nodos y verificar la conexión SSH
+for nodo in "${nodos[@]}"; do
+  verificar_ssh $nodo
+done
+sleep 2
+sudo systemctl enable rke2-server.service
+sleep 2
+sudo systemctl start rke2-server.service
+sleep 30
+echo "El servicio de k8s esta OK"
+sleep 2
+cp /etc/rancher/rke2/rke2.yaml /root/.kube/config
+echo "El cluster ya se encuentra listo para agregar mas nodos"
+sleep 2
+# Obtener el token
+TOKEN=$(cat /var/lib/rancher/rke2/server/node-token)
+
+# Crear el archivo de configuración con el contenido adecuado
+sudo bash -c "cat <<EOF > /etc/rancher/rke2/config.yaml-NODO-12
+server: https://192.168.10.11:9345
+token: $TOKEN
+node-name: NODO-12
+tls-san:
+  - 10.0.0.103
+  - 192.168.10.11
+  - 192.168.10.12
+  - 192.168.10.13
+EOF"
+sleep 2
+ssh root@nodo-12 "mkdir -p /etc/rancher/rke2"
+sleep 2
+scp /etc/rancher/rke2/config.yaml-NODO-12 root@nodo-12:/etc/rancher/rke2/config.yaml
+sleep 2
+sleep 2
+# Obtener el token
+TOKEN=$(cat /var/lib/rancher/rke2/server/node-token)
+
+# Crear el archivo de configuración con el contenido adecuado
+sudo bash -c "cat <<EOF > /etc/rancher/rke2/config.yaml-NODO-13
+server: https://192.168.10.11:9345
+token: $TOKEN
+node-name: NODO-13
+tls-san:
+  - 10.0.0.103
+  - 192.168.10.11
+  - 192.168.10.12
+  - 192.168.10.13
+EOF"
+sleep 2
+ssh root@nodo-13 "mkdir -p /etc/rancher/rke2"
+sleep 2
+scp  /etc/rancher/rke2/config.yaml-NODO-13 root@nodo-13:/etc/rancher/rke2/config.yaml
+sleep 2
+ssh root@nodo-12 "sudo systemctl start rke2-server.service"
+sleep 5
+ssh root@nodo-13 "sudo systemctl start rke2-server.service"
+sleep 2
+ssh root@nodo-12 "cp /etc/rancher/rke2/rke2.yaml /root/.kube/config"
+sleep 2
+ssh root@nodo-13 "cp /etc/rancher/rke2/rke2.yaml /root/.kube/config"
+echo "punto 1 ok"
+sleep 2
+echo "punto 2 ok"
